@@ -12,6 +12,12 @@ const Expense = require("./models/Expense");
 const CustomerPayment = require("./models/CustomerPayment");
 const User = require("./models/user");
 
+app.use(cors({
+  origin: "https://chaimint.netlify.app",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
 const app = express();
 
 const allowedOrigins = (
