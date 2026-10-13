@@ -22,7 +22,7 @@ type SalesListProps = {
   refreshKey: number;
 };
 
-const API_URL = "http://localhost:4000";
+const API_URL = "https://chaimint.onrender.com";
 
 const inputClass =
   "mt-1 w-full min-w-0 rounded-lg border border-teal-800/80 bg-slate-950 px-2.5 py-2 text-sm text-gray-100 outline-none transition placeholder:text-slate-500 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20";

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 
-const API_URL = "http://localhost:4000";
+const API_URL = "https://chaimint.onrender.com";
 
 type LoginProps = {
   onLoginSuccess: (token: string, email: string) => void;

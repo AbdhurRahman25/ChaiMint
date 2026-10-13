@@ -95,7 +95,7 @@ if (!token) {
   return;
 }
 
-const response = await fetch("http://localhost:4000/api/sales", {
+const response = await fetch("https://chaimint.onrender.com/api/sales", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",

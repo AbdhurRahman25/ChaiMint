@@ -10,7 +10,7 @@ type DailyReportData = {
   estimatedDifference: number;
 };
 
-const API_URL = "http://localhost:4000";
+const API_URL = "https://chaimint.onrender.com";
 
 function DailyReport() {
   const [date, setDate] = useState(

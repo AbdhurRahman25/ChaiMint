@@ -16,7 +16,7 @@ type Expense = {
   createdAt: string;
 };
 
-const API_URL = "http://localhost:4000";
+const API_URL = "https://chaimint.onrender.com";
 
 const inputClass =
   "mt-1 w-full min-w-0 rounded-lg border border-gray-700 bg-gray-950 px-3 py-2.5 text-gray-100 outline-none placeholder:text-gray-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20";
