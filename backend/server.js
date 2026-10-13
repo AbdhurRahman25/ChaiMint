@@ -10,6 +10,7 @@ const crypto = require("crypto");
 const Sale = require("./models/sale");
 const Expense = require("./models/Expense");
 const CustomerPayment = require("./models/CustomerPayment");
+const User = require("./models/user");
 
 const app = express();
 
@@ -34,10 +35,11 @@ app.use(
 
 app.use(express.json({ limit: "100kb" }));
 
-// EMAIL OTP + JWT AUTHENTICATION
 
-const otpStore = new Map();
-const otpRequests = new Map();
+const bcrypt = require("bcryptjs");
+
+// Keep the existing imports, app, CORS and express.json setup.
+// Keep your existing emailTransporter and normalizeEmail function.
 
 const emailTransporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
@@ -52,6 +54,9 @@ const emailTransporter = nodemailer.createTransport({
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
+
+const otpStore = new Map();
+const otpRequests = new Map();
 
 function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization || "";
@@ -70,17 +75,33 @@ function authenticateToken(req, res, next) {
   } catch {
     return res.status(401).json({
       success: false,
-      message: "Session expired or token is invalid. Please login again.",
+      message: "Session expired. Please login again.",
     });
   }
 }
 
-// REQUEST OTP
-app.post("/api/auth/request-otp", async (req, res) => {
+function validEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function createToken(user) {
+  return jwt.sign(
+    {
+      userId: user._id.toString(),
+      email: user.email,
+      shopName: user.shopName,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: "8h" }
+  );
+}
+
+// REGISTER: SEND OTP
+app.post("/api/auth/register/request-otp", async (req, res) => {
   try {
     const email = normalizeEmail(req.body.email);
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!validEmail(email)) {
       return res.status(400).json({
         success: false,
         message: "Enter a valid email address",
@@ -99,23 +120,31 @@ app.post("/api/auth/request-otp", async (req, res) => {
       });
     }
 
-    const now = Date.now();
-    const previous = otpRequests.get(email);
+    const existingUser = await User.findOne({ email });
 
-    // One request per 60 seconds
-    if (previous && now - previous.lastSent < 60_000) {
-      return res.status(429).json({
+    if (existingUser) {
+      return res.status(409).json({
         success: false,
-        message: "Please wait 60 seconds before requesting another OTP",
+        message: "This email is already registered. Please login.",
       });
     }
 
-    // Maximum 5 requests per hour
-    const recentRequests = (previous?.times || []).filter(
+    const now = Date.now();
+    const key = `register:${email}`;
+    const previous = otpRequests.get(key);
+
+    if (previous && now - previous.lastSent < 60_000) {
+      return res.status(429).json({
+        success: false,
+        message: "Wait 60 seconds before requesting another OTP",
+      });
+    }
+
+    const recent = (previous?.times || []).filter(
       (time) => now - time < 60 * 60 * 1000
     );
 
-    if (recentRequests.length >= 5) {
+    if (recent.length >= 5) {
       return res.status(429).json({
         success: false,
         message: "Too many OTP requests. Try again later.",
@@ -123,34 +152,32 @@ app.post("/api/auth/request-otp", async (req, res) => {
     }
 
     const otp = crypto.randomInt(100000, 1000000).toString();
-
-    // Store a hash, not the raw OTP
     const otpHash = crypto
       .createHash("sha256")
       .update(otp)
       .digest("hex");
 
-    otpStore.set(email, {
+    otpStore.set(key, {
       otpHash,
       expiresAt: now + 5 * 60 * 1000,
       attempts: 0,
     });
 
-    otpRequests.set(email, {
+    otpRequests.set(key, {
       lastSent: now,
-      times: [...recentRequests, now],
+      times: [...recent, now],
     });
 
     try {
       await emailTransporter.sendMail({
         from: process.env.SMTP_FROM || process.env.SMTP_USER,
         to: email,
-        subject: "Your ChaiMint login OTP",
-        text: `Your ChaiMint verification code is ${otp}. It expires in 5 minutes. Do not share this code with anyone.`,
+        subject: "Verify your ChaiMint registration",
+        text: `Your ChaiMint registration OTP is ${otp}. It expires in 5 minutes. Do not share it.`,
       });
     } catch (mailError) {
-      otpStore.delete(email);
-      console.error("OTP email failed:", mailError.message);
+      otpStore.delete(key);
+      console.error("Registration email failed:", mailError.message);
 
       return res.status(502).json({
         success: false,
@@ -160,37 +187,68 @@ app.post("/api/auth/request-otp", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "OTP sent to your email. It expires in 5 minutes.",
+      message: "Registration OTP sent. It expires in 5 minutes.",
     });
   } catch (error) {
-    console.error("Request OTP error:", error.message);
+    console.error("Registration OTP error:", error.message);
     return res.status(500).json({
       success: false,
-      message: "Could not request OTP",
+      message: "Could not send registration OTP",
     });
   }
 });
 
-// VERIFY OTP
-app.post("/api/auth/verify-otp", async (req, res) => {
+// REGISTER: VERIFY OTP AND CREATE ACCOUNT
+app.post("/api/auth/register/verify-otp", async (req, res) => {
   try {
+    const shopName = String(req.body.shopName || "").trim();
     const email = normalizeEmail(req.body.email);
     const otp = String(req.body.otp || "").trim();
+    const password = String(req.body.password || "");
+    const key = `register:${email}`;
 
-    if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-      !/^\d{6}$/.test(otp)
-    ) {
+    if (!shopName || shopName.length > 100) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter a shop name (maximum 100 characters)",
+      });
+    }
+
+    if (!validEmail(email) || !/^\d{6}$/.test(otp)) {
       return res.status(400).json({
         success: false,
         message: "Enter a valid email and 6-digit OTP",
       });
     }
 
-    const record = otpStore.get(email);
+    if (password.length < 8 || password.length > 128) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be 8–128 characters long",
+      });
+    }
+
+    if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+      return res.status(500).json({
+        success: false,
+        message: "Authentication settings are missing",
+      });
+    }
+
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
+      otpStore.delete(key);
+      return res.status(409).json({
+        success: false,
+        message: "This email is already registered. Please login.",
+      });
+    }
+
+    const record = otpStore.get(key);
 
     if (!record || Date.now() > record.expiresAt) {
-      otpStore.delete(email);
+      otpStore.delete(key);
       return res.status(400).json({
         success: false,
         message: "OTP expired. Request a new OTP.",
@@ -200,10 +258,10 @@ app.post("/api/auth/verify-otp", async (req, res) => {
     record.attempts += 1;
 
     if (record.attempts > 5) {
-      otpStore.delete(email);
+      otpStore.delete(key);
       return res.status(429).json({
         success: false,
-        message: "Too many incorrect attempts. Request a new OTP.",
+        message: "Too many attempts. Request a new OTP.",
       });
     }
 
@@ -224,26 +282,91 @@ app.post("/api/auth/verify-otp", async (req, res) => {
       });
     }
 
-    // OTP can only be used once
-    otpStore.delete(email);
+    const passwordHash = await bcrypt.hash(password, 12);
 
-    const token = jwt.sign(
-      { email },
-      process.env.JWT_SECRET,
-      { expiresIn: "8h" }
-    );
+    const user = await User.create({
+      shopName,
+      email,
+      passwordHash,
+      isVerified: true,
+    });
+
+    otpStore.delete(key);
+
+    const token = createToken(user);
+
+    return res.status(201).json({
+      success: true,
+      message: "Account created successfully",
+      token,
+      user: {
+        shopName: user.shopName,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This email is already registered.",
+      });
+    }
+
+    console.error("Registration error:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Could not create account",
+    });
+  }
+});
+
+// LOGIN: EMAIL AND PASSWORD ONLY
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    const password = String(req.body.password || "");
+
+    if (!validEmail(email) || !password || password.length > 128) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter your registered email and password",
+      });
+    }
+
+    const user = await User.findOne({ email }).select("+passwordHash");
+
+    if (!user || !user.passwordHash) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    const matches = await bcrypt.compare(password, user.passwordHash);
+
+    if (!matches) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    const token = createToken(user);
 
     return res.json({
       success: true,
       message: "Login successful",
       token,
-      user: { email },
+      user: {
+        shopName: user.shopName,
+        email: user.email,
+      },
     });
   } catch (error) {
-    console.error("Verify OTP error:", error.message);
+    console.error("Login error:", error.message);
     return res.status(500).json({
       success: false,
-      message: "Could not verify OTP",
+      message: "Could not login",
     });
   }
 });
@@ -323,6 +446,7 @@ app.post("/api/sales", async (req, res) => {
         ? totalAmount
         : Number(req.body.amountPaid ?? 0);
 
+
     if (
       !Number.isFinite(requestedPaidAmount) ||
       requestedPaidAmount < 0 ||
@@ -337,7 +461,7 @@ app.post("/api/sales", async (req, res) => {
     const actualPaymentStatus =
       requestedPaidAmount >= totalAmount ? "Paid" : "Pending";
 
-    const sale = await Sale.create({
+    const sale = await Sale.create({ userId: req.user.userId,
       customerName: customerName?.trim() || "Walk-in Customer",
       teaQuantity: teaQty,
       pricePerCup: teaPrice,
@@ -364,10 +488,13 @@ app.post("/api/sales", async (req, res) => {
 });
 
 
- // LIST SALES
+
+ // LIST SALES — only the logged-in user's sales
 app.get("/api/sales", async (req, res) => {
   try {
-    const sales = await Sale.find().sort({ createdAt: -1 });
+    const sales = await Sale.find({
+      userId: req.user.userId,
+    }).sort({ createdAt: -1 });
 
     return res.status(200).json({
       success: true,
@@ -384,6 +511,7 @@ app.get("/api/sales", async (req, res) => {
   }
 });
 
+
  // EDIT SALE
 app.put("/api/sales/:id", async (req, res) => {
   try {
@@ -396,7 +524,10 @@ app.put("/api/sales/:id", async (req, res) => {
       });
     }
 
-    const sale = await Sale.findById(id);
+    const sale = await Sale.findOne({
+  _id: id,
+  userId: req.user.userId,
+});
 
     if (!sale) {
       return res.status(404).json({
@@ -451,9 +582,11 @@ app.put("/api/sales/:id", async (req, res) => {
       (teaQty * teaPrice + biscuitQty * biscuitUnitPrice) * 100
     ) / 100;
 
+    // Preserve recorded customer payment history
     const linkedPayment = await CustomerPayment.findOne({
-      "allocations.saleId": sale._id,
-    });
+  userId: req.user.userId,
+  "allocations.saleId": sale._id,
+});
 
     const oldPaid =
       sale.amountPaid != null
@@ -575,7 +708,10 @@ app.delete("/api/sales/:id", async (req, res) => {
       });
     }
 
-    const sale = await Sale.findById(id);
+     await Sale.findOneAndDelete({
+  _id: id,
+  userId: req.user.userId,
+});
 
     if (!sale) {
       return res.status(404).json({
@@ -584,10 +720,14 @@ app.delete("/api/sales/:id", async (req, res) => {
       });
     }
 
-    // Preserve recorded customer payment history
+     // Preserve recorded customer payment history
     const linkedPayment = await CustomerPayment.findOne({
-      "allocations.saleId": sale._id,
-    });
+  userId: req.user.userId,
+  "allocations.saleId": sale._id,
+});
+
+   
+   
 
     if (linkedPayment) {
       return res.status(409).json({
@@ -654,7 +794,7 @@ app.post("/api/expenses", async (req, res) => {
       });
     }
 
-    const expense = await Expense.create(values);
+    const expense = await Expense.create({ ...values, userId: req.user.userId });
 
     return res.status(201).json({
       success: true,
@@ -674,7 +814,7 @@ app.post("/api/expenses", async (req, res) => {
 // LIST EXPENSES
 app.get("/api/expenses", async (req, res) => {
   try {
-    const expenses = await Expense.find().sort({ createdAt: -1 });
+    const expenses = await Expense.find({ userId: req.user.userId }).sort({ createdAt: -1 });
 
     return res.json({
       success: true,
@@ -856,7 +996,7 @@ app.post("/api/customer-payments", async (req, res) => {
       remaining -= applied;
     }
 
-    const payment = await CustomerPayment.create({
+    const payment = await CustomerPayment.create({ userId: req.user.userId,
       customerName,
       amount,
       notes,
@@ -881,7 +1021,7 @@ app.post("/api/customer-payments", async (req, res) => {
 // LIST CUSTOMER PAYMENTS
 app.get("/api/customer-payments", async (req, res) => {
   try {
-    const payments = await CustomerPayment.find().sort({
+    const payments = await CustomerPayment.find({ userId: req.user.userId }).sort({
       createdAt: -1,
     });
 
@@ -902,7 +1042,7 @@ app.get("/api/customer-payments", async (req, res) => {
 // CUSTOMER BALANCES
 app.get("/api/customer-balances", async (req, res) => {
   try {
-    const sales = await Sale.find();
+    const sales = await Sale.find({ userId: req.user.userId }).sort({ createdAt: -1 });
     const balances = {};
 
     for (const sale of sales) {
@@ -971,12 +1111,22 @@ app.get("/api/reports/daily", async (req, res) => {
         message: "Invalid date. Use YYYY-MM-DD.",
       });
     }
+const ownerId = req.user.userId;
 
-    const [sales, expenses, payments] = await Promise.all([
-      Sale.find({ createdAt: { $gte: start, $lt: end } }),
-      Expense.find({ createdAt: { $gte: start, $lt: end } }),
-      CustomerPayment.find({ createdAt: { $gte: start, $lt: end } }),
-    ]);
+const [sales, expenses, payments] = await Promise.all([
+  Sale.find({
+    userId: ownerId,
+    createdAt: { $gte: start, $lt: end },
+  }),
+  Expense.find({
+    userId: ownerId,
+    createdAt: { $gte: start, $lt: end },
+  }),
+  CustomerPayment.find({
+    userId: ownerId,
+    createdAt: { $gte: start, $lt: end },
+  }),
+]);
 
     const totalSales = sales.reduce(
       (sum, sale) => sum + sale.totalAmount,

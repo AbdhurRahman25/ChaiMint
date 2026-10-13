@@ -19,10 +19,10 @@ function formatCustomerName(value: string) {
 
 export default function SalesForm({ onSaleSaved }: SalesFormProps) {
   const [customerName, setCustomerName] = useState("");
-  const [teaQuantity, setTeaQuantity] = useState("1");
+  const [teaQuantity, setTeaQuantity] = useState("");
   const [pricePerCup, setPricePerCup] = useState("10");
 
-  const [biscuitQuantity, setBiscuitQuantity] = useState("0");
+  const [biscuitQuantity, setBiscuitQuantity] = useState("");
   const [biscuitPrice, setBiscuitPrice] = useState("5");
 
   const [paymentStatus, setPaymentStatus] = useState<"Paid" | "Pending">(
@@ -103,7 +103,7 @@ const response = await fetch("http://localhost:4000/api/sales", {
   },
   body: JSON.stringify({
 
-          customerName: customerName.trim() || "Walk-in Customer",
+          customerName: customerName.trim() || "Customer Name...",
 
           teaQuantity: quantity,
           pricePerCup: price,
@@ -129,9 +129,9 @@ const response = await fetch("http://localhost:4000/api/sales", {
       showToast("Sale saved successfully!", "success");
 
       setCustomerName("");
-      setTeaQuantity("1");
+      setTeaQuantity("");
       setPricePerCup("10");
-      setBiscuitQuantity("0");
+      setBiscuitQuantity("");
       setBiscuitPrice("5");
       setPaymentStatus("Paid");
       setAmountPaid("");
@@ -178,7 +178,7 @@ const response = await fetch("http://localhost:4000/api/sales", {
             onChange={(event) =>
               setCustomerName(formatCustomerName(event.target.value))
             }
-            placeholder="Walk-in customer"
+            placeholder="Customer Name..."
           />
         </div>
 
@@ -200,6 +200,7 @@ const response = await fetch("http://localhost:4000/api/sales", {
                 required
                 value={teaQuantity}
                 onChange={(event) => setTeaQuantity(event.target.value)}
+                placeholder="1"
               />
             </div>
 

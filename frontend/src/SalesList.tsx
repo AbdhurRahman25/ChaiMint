@@ -37,7 +37,7 @@ export default function SalesList({ refreshKey }: SalesListProps) {
   const [error, setError] = useState("");
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [customerName, setCustomerName] = useState("");
-  const [teaQuantity, setTeaQuantity] = useState("1");
+  const [teaQuantity, setTeaQuantity] = useState("");
   const [pricePerCup, setPricePerCup] = useState("10");
   const [biscuitQuantity, setBiscuitQuantity] = useState("0");
   const [biscuitPrice, setBiscuitPrice] = useState("5");
@@ -174,7 +174,7 @@ const loadSales = useCallback(async () => {
 
     setEditingSale(null);
     setCustomerName("");
-    setTeaQuantity("1");
+    setTeaQuantity("");
     setPricePerCup("10");
     setBiscuitQuantity("0");
     setBiscuitPrice("5");
@@ -506,7 +506,7 @@ const loadSales = useCallback(async () => {
                   className={inputClass}
                   value={customerName}
                   onChange={(event) => setCustomerName(event.target.value)}
-                  placeholder="Customer Name"
+                  placeholder="Customer Name..."
                 />
               </div>
 
