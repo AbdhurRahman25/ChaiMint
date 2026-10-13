@@ -501,6 +501,7 @@ app.post("/api/sales", async (req, res) => {
 
 
 
+
  // LIST SALES — only the logged-in user's sales
 app.get("/api/sales", async (req, res) => {
   try {
@@ -522,6 +523,7 @@ app.get("/api/sales", async (req, res) => {
     });
   }
 });
+
 
 
  // EDIT SALE
@@ -547,6 +549,15 @@ app.put("/api/sales/:id", async (req, res) => {
         message: "Sale not found",
       });
     }
+
+    
+    if (sale.status === "Cancelled") {
+      return res.status(409).json({
+        success: false,
+        message: "Cancelled sales cannot be edited.",
+      });
+    }
+
 
     const {
       customerName,
@@ -709,7 +720,8 @@ app.put("/api/sales/:id", async (req, res) => {
 
 
 
- // DELETE SALE
+ 
+ // DELETE SALE — cancel instead of permanently deleting
 app.delete("/api/sales/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -721,7 +733,6 @@ app.delete("/api/sales/:id", async (req, res) => {
       });
     }
 
-    // Find only this account's sale
     const sale = await Sale.findOne({
       _id: id,
       userId: req.user.userId,
@@ -734,38 +745,33 @@ app.delete("/api/sales/:id", async (req, res) => {
       });
     }
 
-    // Preserve this account's payment history
-    const linkedPayment = await CustomerPayment.findOne({
-      userId: req.user.userId,
-      "allocations.saleId": sale._id,
-    });
-
-    if (linkedPayment) {
+    if (sale.status === "Cancelled") {
       return res.status(409).json({
         success: false,
-        message:
-          "This sale has customer payment history and cannot be deleted.",
+        message: "This sale is already cancelled.",
       });
     }
 
-    await Sale.deleteOne({
-      _id: sale._id,
-      userId: req.user.userId,
-    });
+    sale.status = "Cancelled";
+    sale.cancelledAt = new Date();
+
+    await sale.save();
 
     return res.json({
       success: true,
-      message: "Sale deleted successfully",
+      message: "Sale cancelled successfully. Payment history preserved.",
+      sale,
     });
   } catch (error) {
-    console.error("Delete sale error:", error);
+    console.error("Cancel sale error:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Failed to delete sale",
+      message: "Failed to cancel sale",
     });
   }
 });
+
 
 
 function formatExpenseCategory(value) {
@@ -937,36 +943,40 @@ app.delete("/api/expenses/:id", async (req, res) => {
 });
 
 
-// CREATE CUSTOMER PAYMENT
+
+ // CREATE CUSTOMER PAYMENT — ignore cancelled sales
 app.post("/api/customer-payments", async (req, res) => {
   try {
-    const customerName = req.body.customerName?.trim();
-    const amount = Number(req.body.amount);
-    const notes = req.body.notes || "";
+    const customerName =
+      typeof req.body.customerName === "string"
+        ? req.body.customerName.trim()
+        : "";
 
-    if (
-      !customerName ||
-      !Number.isFinite(amount) ||
-      amount <= 0
-    ) {
+    const amount = Number(req.body.amount);
+    const notes =
+      typeof req.body.notes === "string" ? req.body.notes : "";
+
+    if (!customerName || !Number.isFinite(amount) || amount <= 0) {
       return res.status(400).json({
         success: false,
         message: "Valid customer name and payment amount are required",
       });
     }
 
-   const allSales = await Sale.find({
-  userId: req.user.userId,
-}).sort({ createdAt: 1 });
+    // Only active sales belonging to this logged-in user
+    const customerSales = await Sale.find({
+      userId: req.user.userId,
+      status: { $ne: "Cancelled" },
+    }).sort({ createdAt: 1 });
 
-    const customerSales = allSales.filter(
+    const matchingSales = customerSales.filter(
       (sale) =>
         (sale.customerName || "Walk-in Customer")
           .trim()
           .toLowerCase() === customerName.toLowerCase()
     );
 
-    const pendingSales = customerSales
+    const pendingSales = matchingSales
       .map((sale) => {
         const paid =
           sale.amountPaid != null
@@ -1019,7 +1029,8 @@ app.post("/api/customer-payments", async (req, res) => {
       remaining -= applied;
     }
 
-    const payment = await CustomerPayment.create({ userId: req.user.userId,
+    const payment = await CustomerPayment.create({
+      userId: req.user.userId,
       customerName,
       amount,
       notes,
@@ -1034,6 +1045,7 @@ app.post("/api/customer-payments", async (req, res) => {
     });
   } catch (error) {
     console.error("Customer payment error:", error);
+
     return res.status(500).json({
       success: false,
       message: "Failed to record customer payment",
@@ -1062,10 +1074,15 @@ app.get("/api/customer-payments", async (req, res) => {
   }
 });
 
-// CUSTOMER BALANCES
+
+ // CUSTOMER BALANCES — exclude cancelled sales
 app.get("/api/customer-balances", async (req, res) => {
   try {
-    const sales = await Sale.find({ userId: req.user.userId }).sort({ createdAt: -1 });
+    const sales = await Sale.find({
+      userId: req.user.userId,
+      status: { $ne: "Cancelled" },
+    }).sort({ createdAt: -1 });
+
     const balances = {};
 
     for (const sale of sales) {
@@ -1108,7 +1125,9 @@ app.get("/api/customer-balances", async (req, res) => {
   }
 });
 
-// DAILY REPORT
+
+
+ // DAILY REPORT — exclude cancelled sales
 app.get("/api/reports/daily", async (req, res) => {
   try {
     const date = req.query.date;
@@ -1134,22 +1153,26 @@ app.get("/api/reports/daily", async (req, res) => {
         message: "Invalid date. Use YYYY-MM-DD.",
       });
     }
-const ownerId = req.user.userId;
 
-const [sales, expenses, payments] = await Promise.all([
-  Sale.find({
-    userId: ownerId,
-    createdAt: { $gte: start, $lt: end },
-  }),
-  Expense.find({
-    userId: ownerId,
-    createdAt: { $gte: start, $lt: end },
-  }),
-  CustomerPayment.find({
-    userId: ownerId,
-    createdAt: { $gte: start, $lt: end },
-  }),
-]);
+    const ownerId = req.user.userId;
+
+    const [sales, expenses, payments] = await Promise.all([
+      Sale.find({
+        userId: ownerId,
+        status: { $ne: "Cancelled" },
+        createdAt: { $gte: start, $lt: end },
+      }),
+
+      Expense.find({
+        userId: ownerId,
+        createdAt: { $gte: start, $lt: end },
+      }),
+
+      CustomerPayment.find({
+        userId: ownerId,
+        createdAt: { $gte: start, $lt: end },
+      }),
+    ]);
 
     const totalSales = sales.reduce(
       (sum, sale) => sum + sale.totalAmount,
@@ -1177,12 +1200,14 @@ const [sales, expenses, payments] = await Promise.all([
     });
   } catch (error) {
     console.error("Daily report error:", error);
+
     return res.status(500).json({
       success: false,
       message: "Failed to generate daily report",
     });
   }
 });
+
 
 // START SERVER
 async function startServer() {
