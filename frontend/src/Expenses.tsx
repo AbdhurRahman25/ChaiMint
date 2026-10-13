@@ -70,23 +70,42 @@ function Expenses() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  
   async function loadExpenses() {
     try {
-      const response = await fetch(`${API_URL}/api/expenses`);
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Please login again with your email OTP.");
+      }
+
+      const response = await fetch(`${API_URL}/api/expenses`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
       const data = await response.json();
 
-      if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Login expired. Please login again.");
+      }
+
+      if (!response.ok || data.success === false) {
         throw new Error(data.message || "Failed to load expenses");
       }
 
       setExpenses(data.expenses || []);
-    } catch {
+    } catch (error) {
       showToast(
-        "Expenses load aagala. Backend running-a irukka check pannunga.",
+        error instanceof Error
+          ? error.message
+          : "Expenses load aagala.",
         "error"
       );
     }
   }
+
 
   useEffect(() => {
     void loadExpenses();
@@ -157,38 +176,53 @@ function Expenses() {
     }
 
     setSavingEdit(true);
+     
+  try {
+    const token = localStorage.getItem("token");
 
-    try {
-      const response = await fetch(`${API_URL}/api/expenses/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category: formattedCategory,
-          quantity: qty,
-          amount: unitAmount,
-          totalAmount: Math.round(qty * unitAmount * 100) / 100,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Expense update failed");
-      }
-
-      cancelEdit();
-      showToast("Expense updated successfully!", "success");
-      await loadExpenses();
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "Expense update failed.",
-        "error"
-      );
-    } finally {
-      setSavingEdit(false);
+    if (!token) {
+      throw new Error("Please login again with your email OTP.");
     }
+
+    const response = await fetch(`${API_URL}/api/expenses/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        category: formattedCategory,
+        quantity: qty,
+        amount: unitAmount,
+        totalAmount: Math.round(qty * unitAmount * 100) / 100,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (response.status === 401) {
+      throw new Error("Login expired. Please login again.");
+    }
+
+    if (!response.ok || data.success === false) {
+      throw new Error(data.message || "Expense update failed");
+    }
+
+    cancelEdit();
+    showToast("Expense updated successfully!", "success");
+    await loadExpenses();
+  } catch (error) {
+    showToast(
+      error instanceof Error ? error.message : "Expense update failed.",
+      "error"
+    );
+  } finally {
+    setSavingEdit(false);
   }
 
+};
+
+  
   async function deleteExpense(id: string) {
     const confirmed = window.confirm(
       "Indha expense-ai delete pannava? Indha action-ai undo panna mudiyadhu."
@@ -196,16 +230,30 @@ function Expenses() {
 
     if (!confirmed) return;
 
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      showToast("Please login again with your email OTP.", "error");
+      return;
+    }
+
     setDeletingId(id);
 
     try {
       const response = await fetch(`${API_URL}/api/expenses/${id}`, {
         method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Login expired. Please login again.");
+      }
+
+      if (!response.ok || data.success === false) {
         throw new Error(data.message || "Expense delete failed");
       }
 
@@ -224,6 +272,7 @@ function Expenses() {
       setDeletingId(null);
     }
   }
+
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -247,39 +296,53 @@ function Expenses() {
 
     setLoading(true);
 
-    try {
-      const response = await fetch(`${API_URL}/api/expenses`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category: formattedCategory,
-          quantity: numericQuantity,
-          amount: numericAmount,
-          totalAmount: totalForEntry,
-        }),
-      });
+    
+  try {
+    const token = localStorage.getItem("token");
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to save expense");
-      }
-
-      setCategory("Milk");
-      setQuantity("1");
-      setAmount("");
-
-      showToast("Expense saved successfully!", "success");
-
-      await loadExpenses();
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "Expense save aagala.",
-        "error"
-      );
-    } finally {
-      setLoading(false);
+    if (!token) {
+      throw new Error("Please login again with your email OTP.");
     }
+
+    const response = await fetch(`${API_URL}/api/expenses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        category: formattedCategory,
+        quantity: numericQuantity,
+        amount: numericAmount,
+        totalAmount: totalForEntry,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (response.status === 401) {
+      throw new Error("Login expired. Please login again.");
+    }
+
+    if (!response.ok || data.success === false) {
+      throw new Error(data.message || "Failed to save expense");
+    }
+
+    setCategory("Milk");
+    setQuantity("1");
+    setAmount("");
+
+    showToast("Expense saved successfully!", "success");
+    await loadExpenses();
+  } catch (error) {
+    showToast(
+      error instanceof Error ? error.message : "Expense save aagala.",
+      "error"
+    );
+  } finally {
+    setLoading(false);
+  }
+
   }
 
   return (

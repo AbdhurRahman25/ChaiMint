@@ -38,37 +38,66 @@ function CustomerBalances() {
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
 
+ 
   async function loadData() {
+    setDataLoading(true);
+
     try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Please login again with your email OTP.");
+      }
+
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      };
+
       const [balanceResponse, paymentResponse] = await Promise.all([
-        fetch(`${API_URL}/api/customer-balances`),
-        fetch(`${API_URL}/api/customer-payments`),
+        fetch(`${API_URL}/api/customer-balances`, { headers }),
+        fetch(`${API_URL}/api/customer-payments`, { headers }),
       ]);
 
       const balanceData = await balanceResponse.json();
       const paymentData = await paymentResponse.json();
 
+      if (
+        balanceResponse.status === 401 ||
+        paymentResponse.status === 401
+      ) {
+        throw new Error("Login expired. Please logout and login again.");
+      }
+
       if (!balanceResponse.ok || !paymentResponse.ok) {
-        throw new Error("Customer data load aagala.");
+        throw new Error(
+          balanceData.message ||
+            paymentData.message ||
+            "Customer data load aagala."
+        );
       }
 
       setCustomers(
         Array.isArray(balanceData.customers) ? balanceData.customers : []
       );
+
       setPayments(
         Array.isArray(paymentData.payments) ? paymentData.payments : []
       );
+
+      setIsError(false);
+      setMessage("");
     } catch (error) {
       setIsError(true);
       setMessage(
         error instanceof Error
           ? error.message
-          : "Backend running-a check pannunga."
+          : "Customer data load aagala."
       );
     } finally {
       setDataLoading(false);
     }
   }
+
 
   useEffect(() => {
     void loadData();
@@ -115,6 +144,7 @@ function CustomerBalances() {
       );
   }, [payments, customerName]);
 
+ 
   async function handlePayment(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMessage("");
@@ -146,12 +176,23 @@ function CustomerBalances() {
       return;
     }
 
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setIsError(true);
+      setMessage("Please login again with your email OTP.");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const response = await fetch(`${API_URL}/api/customer-payments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           customerName: selectedCustomer.customerName,
           amount: numericAmount,
@@ -161,7 +202,11 @@ function CustomerBalances() {
 
       const data = await response.json();
 
-      if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Login expired. Please logout and login again.");
+      }
+
+      if (!response.ok || data.success === false) {
         throw new Error(data.message || "Payment save aagala.");
       }
 
@@ -180,6 +225,7 @@ function CustomerBalances() {
       setLoading(false);
     }
   }
+
 
   return (
     <section className="w-full space-y-6 text-gray-100">

@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 
 type DailyReportData = {
@@ -26,12 +25,31 @@ function DailyReport() {
     setMessage("");
 
     try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Login session missing. Please login again.");
+      }
+
       const response = await fetch(
-        `${API_URL}/api/reports/daily?date=${selectedDate}`
+        `${API_URL}/api/reports/daily?date=${encodeURIComponent(selectedDate)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
+
       const data = await response.json();
 
-      if (!response.ok || !data.success) {
+      if (response.status === 401) {
+        throw new Error(
+          "Login session expired or invalid. Please login again."
+        );
+      }
+
+      if (!response.ok || data.success === false) {
         throw new Error(data.message || "Report load failed");
       }
 
@@ -39,7 +57,9 @@ function DailyReport() {
     } catch (error) {
       setReport(null);
       setMessage(
-        error instanceof Error ? error.message : "Unable to load daily report"
+        error instanceof Error
+          ? error.message
+          : "Unable to load daily report"
       );
     } finally {
       setLoading(false);
@@ -84,8 +104,14 @@ function DailyReport() {
 
   return (
     <section className="w-full rounded-2xl border border-gray-800 bg-gray-900 p-5 shadow-xl shadow-black/10 sm:p-6">
-      <p className="text-sm font-medium text-emerald-400">BUSINESS OVERVIEW</p>
-      <h2 className="mt-1 text-2xl font-bold text-white">Daily Report</h2>
+      <p className="text-sm font-medium text-emerald-400">
+        BUSINESS OVERVIEW
+      </p>
+
+      <h2 className="mt-1 text-2xl font-bold text-white">
+        Daily Report
+      </h2>
+
       <p className="mt-1 text-sm text-gray-400">
         Review sales, customer payments and expenses by date.
       </p>
@@ -95,6 +121,7 @@ function DailyReport() {
           <label className="text-sm font-medium text-gray-300">
             Select Date
           </label>
+
           <input
             className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2.5 text-gray-100 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
             type="date"
@@ -114,7 +141,9 @@ function DailyReport() {
       </div>
 
       {loading && (
-        <p className="mt-5 text-sm text-gray-400">Loading report...</p>
+        <p className="mt-5 text-sm text-gray-400">
+          Loading report...
+        </p>
       )}
 
       {message && (
@@ -129,7 +158,10 @@ function DailyReport() {
       {report && !loading && (
         <>
           <p className="mt-5 text-sm text-gray-400">
-            Report date: <span className="font-medium text-gray-200">{report.date}</span>
+            Report date:{" "}
+            <span className="font-medium text-gray-200">
+              {report.date}
+            </span>
           </p>
 
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -138,11 +170,19 @@ function DailyReport() {
                 key={card.label}
                 className="rounded-xl border border-gray-800 bg-gray-950 p-4"
               >
-                <p className="text-sm text-gray-400">{card.label}</p>
-                <p className={`mt-2 text-2xl font-bold ${card.valueClass}`}>
+                <p className="text-sm text-gray-400">
+                  {card.label}
+                </p>
+
+                <p
+                  className={`mt-2 text-2xl font-bold ${card.valueClass}`}
+                >
                   {card.value}
                 </p>
-                <p className="mt-2 text-xs text-gray-500">{card.detail}</p>
+
+                <p className="mt-2 text-xs text-gray-500">
+                  {card.detail}
+                </p>
               </div>
             ))}
           </div>

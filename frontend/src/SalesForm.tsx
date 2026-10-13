@@ -87,10 +87,22 @@ export default function SalesForm({ onSaleSaved }: SalesFormProps) {
     setSaving(true);
 
     try {
-      const response = await fetch("http://localhost:4000/api/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+     
+const token = localStorage.getItem("token");
+
+if (!token) {
+  showToast("Please login with your email OTP first.", "error");
+  return;
+}
+
+const response = await fetch("http://localhost:4000/api/sales", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  },
+  body: JSON.stringify({
+
           customerName: customerName.trim() || "Walk-in Customer",
 
           teaQuantity: quantity,

@@ -3,6 +3,9 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 require("dotenv").config();
+const nodemailer = require("nodemailer");
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 const Sale = require("./models/sale");
 const Expense = require("./models/Expense");
@@ -10,8 +13,248 @@ const CustomerPayment = require("./models/CustomerPayment");
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+const allowedOrigins = (
+  process.env.FRONTEND_URL || "http://localhost:5173"
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Origin not allowed by CORS"));
+    },
+  })
+);
+
+app.use(express.json({ limit: "100kb" }));
+
+// EMAIL OTP + JWT AUTHENTICATION
+
+const otpStore = new Map();
+const otpRequests = new Map();
+
+const emailTransporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || "smtp.gmail.com",
+  port: Number(process.env.SMTP_PORT || 587),
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers.authorization || "";
+  const [scheme, token] = authHeader.split(" ");
+
+  if (scheme !== "Bearer" || !token) {
+    return res.status(401).json({
+      success: false,
+      message: "Please login to continue",
+    });
+  }
+
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    return next();
+  } catch {
+    return res.status(401).json({
+      success: false,
+      message: "Session expired or token is invalid. Please login again.",
+    });
+  }
+}
+
+// REQUEST OTP
+app.post("/api/auth/request-otp", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter a valid email address",
+      });
+    }
+
+    if (
+      !process.env.SMTP_USER ||
+      !process.env.SMTP_PASS ||
+      !process.env.JWT_SECRET ||
+      process.env.JWT_SECRET.length < 32
+    ) {
+      return res.status(500).json({
+        success: false,
+        message: "Email or authentication settings are missing",
+      });
+    }
+
+    const now = Date.now();
+    const previous = otpRequests.get(email);
+
+    // One request per 60 seconds
+    if (previous && now - previous.lastSent < 60_000) {
+      return res.status(429).json({
+        success: false,
+        message: "Please wait 60 seconds before requesting another OTP",
+      });
+    }
+
+    // Maximum 5 requests per hour
+    const recentRequests = (previous?.times || []).filter(
+      (time) => now - time < 60 * 60 * 1000
+    );
+
+    if (recentRequests.length >= 5) {
+      return res.status(429).json({
+        success: false,
+        message: "Too many OTP requests. Try again later.",
+      });
+    }
+
+    const otp = crypto.randomInt(100000, 1000000).toString();
+
+    // Store a hash, not the raw OTP
+    const otpHash = crypto
+      .createHash("sha256")
+      .update(otp)
+      .digest("hex");
+
+    otpStore.set(email, {
+      otpHash,
+      expiresAt: now + 5 * 60 * 1000,
+      attempts: 0,
+    });
+
+    otpRequests.set(email, {
+      lastSent: now,
+      times: [...recentRequests, now],
+    });
+
+    try {
+      await emailTransporter.sendMail({
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: email,
+        subject: "Your ChaiMint login OTP",
+        text: `Your ChaiMint verification code is ${otp}. It expires in 5 minutes. Do not share this code with anyone.`,
+      });
+    } catch (mailError) {
+      otpStore.delete(email);
+      console.error("OTP email failed:", mailError.message);
+
+      return res.status(502).json({
+        success: false,
+        message: "Could not send OTP email. Check SMTP settings.",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "OTP sent to your email. It expires in 5 minutes.",
+    });
+  } catch (error) {
+    console.error("Request OTP error:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Could not request OTP",
+    });
+  }
+});
+
+// VERIFY OTP
+app.post("/api/auth/verify-otp", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    const otp = String(req.body.otp || "").trim();
+
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      !/^\d{6}$/.test(otp)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter a valid email and 6-digit OTP",
+      });
+    }
+
+    const record = otpStore.get(email);
+
+    if (!record || Date.now() > record.expiresAt) {
+      otpStore.delete(email);
+      return res.status(400).json({
+        success: false,
+        message: "OTP expired. Request a new OTP.",
+      });
+    }
+
+    record.attempts += 1;
+
+    if (record.attempts > 5) {
+      otpStore.delete(email);
+      return res.status(429).json({
+        success: false,
+        message: "Too many incorrect attempts. Request a new OTP.",
+      });
+    }
+
+    const submittedHash = crypto
+      .createHash("sha256")
+      .update(otp)
+      .digest("hex");
+
+    const matches = crypto.timingSafeEqual(
+      Buffer.from(record.otpHash, "hex"),
+      Buffer.from(submittedHash, "hex")
+    );
+
+    if (!matches) {
+      return res.status(400).json({
+        success: false,
+        message: "Incorrect OTP",
+      });
+    }
+
+    // OTP can only be used once
+    otpStore.delete(email);
+
+    const token = jwt.sign(
+      { email },
+      process.env.JWT_SECRET,
+      { expiresIn: "8h" }
+    );
+
+    return res.json({
+      success: true,
+      message: "Login successful",
+      token,
+      user: { email },
+    });
+  } catch (error) {
+    console.error("Verify OTP error:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Could not verify OTP",
+    });
+  }
+});
+
+// CURRENT USER
+app.get("/api/auth/me", authenticateToken, (req, res) => {
+  return res.json({
+    success: true,
+    user: { email: req.user.email },
+  });
+});
 
 const validPaymentStatuses = ["Paid", "Pending"];
 
@@ -21,6 +264,13 @@ app.get("/api", (req, res) => {
     message: "ChaiMint backend connected!",
   });
 });
+
+// PROTECT ALL BUSINESS APIS
+app.use("/api/sales", authenticateToken);
+app.use("/api/expenses", authenticateToken);
+app.use("/api/customer-payments", authenticateToken);
+app.use("/api/customer-balances", authenticateToken);
+app.use("/api/reports", authenticateToken);
 
  // CREATE SALE
 app.post("/api/sales", async (req, res) => {
@@ -133,10 +383,6 @@ app.get("/api/sales", async (req, res) => {
     });
   }
 });
-
-
-
-
 
  // EDIT SALE
 app.put("/api/sales/:id", async (req, res) => {

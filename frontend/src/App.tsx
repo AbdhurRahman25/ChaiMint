@@ -10,6 +10,7 @@ import DailyReport from "./DailyReport";
 import ChaimintLogo from "./ChaimintLogo";
 import "./App.css";
 import ToastContainer from "./Toast";
+import Login from "./Login";
 
 type Page =
   | "Dashboard"
@@ -31,6 +32,28 @@ const menuItems: {
 
 function App() {
   const [page, setPage] = useState<Page>("Dashboard");
+  const [isLoggedIn, setIsLoggedIn] = useState(
+  () => Boolean(localStorage.getItem("token"))
+);
+
+const [userEmail, setUserEmail] = useState(
+  () => localStorage.getItem("userEmail") || ""
+);
+
+function handleLoginSuccess(token: string, email: string) {
+  localStorage.setItem("token", token);
+  localStorage.setItem("userEmail", email);
+  setUserEmail(email);
+  setIsLoggedIn(true);
+}
+
+function handleLogout() {
+  localStorage.removeItem("token");
+  localStorage.removeItem("userEmail");
+  setUserEmail("");
+  setIsLoggedIn(false);
+  setPage("Dashboard");
+}
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [creditCustomerName, setCreditCustomerName] = useState("");
@@ -200,7 +223,11 @@ function handleMarkAsPaid(customerName: string) {
           </div>
         );
     }
-  }
+}
+
+   if (!isLoggedIn) {
+  return <Login onLoginSuccess={handleLoginSuccess} />;
+   }
 
   return (
     <div className="min-h-screen bg-[#030914] text-slate-100 md:flex">
@@ -259,9 +286,18 @@ function handleMarkAsPaid(customerName: string) {
             </h2>
           </div>
 
-          <div className="rounded-full border border-emerald-900/70 bg-slate-900 px-4 py-2 text-sm font-medium text-emerald-300">
-            ☕ Shop Workspace
-          </div>
+         <div className="flex flex-wrap items-center gap-3">
+  <div className="rounded-full border border-emerald-900/70 bg-slate-900 px-4 py-2 text-sm font-medium text-emerald-300">
+    ☕ {userEmail || "Shop Workspace"}
+  </div>
+
+  <button
+    onClick={handleLogout}
+    className="rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800"
+  >
+    Logout
+  </button>
+</div>
         </header>
 
         {renderPage()}

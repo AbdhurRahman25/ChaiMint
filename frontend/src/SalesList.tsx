@@ -47,27 +47,39 @@ export default function SalesList({ refreshKey }: SalesListProps) {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const loadSales = useCallback(async () => {
-    setLoading(true);
-    setError("");
+ 
+const loadSales = useCallback(async () => {
+  setLoading(true);
+  setError("");
 
-    try {
-      const response = await fetch(`${API_URL}/api/sales`);
-      const data = await response.json();
+  try {
+    const token = localStorage.getItem("token");
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to load sales");
-      }
-
-      setSales(data.sales || []);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not load sales"
-      );
-    } finally {
-      setLoading(false);
+    if (!token) {
+      throw new Error("Please login with your email OTP first.");
     }
-  }, []);
+
+    const response = await fetch(`${API_URL}/api/sales`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Failed to load sales");
+    }
+
+    setSales(data.sales || []);
+  } catch (err) {
+    setError(
+      err instanceof Error ? err.message : "Could not load sales"
+    );
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   useEffect(() => {
     void loadSales();
@@ -125,7 +137,7 @@ export default function SalesList({ refreshKey }: SalesListProps) {
         0,
         Number(
           sale.amountPaid ??
-            (sale.paymentStatus === "Paid" ? total : 0)
+          (sale.paymentStatus === "Paid" ? total : 0)
         )
       ),
       total
@@ -170,6 +182,7 @@ export default function SalesList({ refreshKey }: SalesListProps) {
     setAmountPaid("0");
   }
 
+  
   async function handleUpdate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -182,8 +195,8 @@ export default function SalesList({ refreshKey }: SalesListProps) {
 
     if (
       paymentStatus === "Pending" &&
-      (!Number.isFinite(Number(amountPaid)) ||
-        amountPaid.trim() === "" ||
+      (amountPaid.trim() === "" ||
+        !Number.isFinite(Number(amountPaid)) ||
         Number(amountPaid) < 0 ||
         Number(amountPaid) > totalAmount)
     ) {
@@ -191,6 +204,13 @@ export default function SalesList({ refreshKey }: SalesListProps) {
         "Paid amount must be between ₹0 and the total amount.",
         "error"
       );
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      showToast("Please login again with your email OTP.", "error");
       return;
     }
 
@@ -207,7 +227,10 @@ export default function SalesList({ refreshKey }: SalesListProps) {
         `${API_URL}/api/sales/${editingSale._id}`,
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify({
             customerName: customerName.trim() || "Walk-in Customer",
             teaQuantity: quantity,
@@ -224,6 +247,10 @@ export default function SalesList({ refreshKey }: SalesListProps) {
       );
 
       const data = await response.json();
+
+      if (response.status === 401) {
+        throw new Error("Login expired. Please logout and login again.");
+      }
 
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Could not update sale");
@@ -242,6 +269,8 @@ export default function SalesList({ refreshKey }: SalesListProps) {
     }
   }
 
+
+  
   async function handleDelete(sale: Sale) {
     const amounts = getSaleAmounts(sale);
 
@@ -251,15 +280,31 @@ export default function SalesList({ refreshKey }: SalesListProps) {
 
     if (!confirmed) return;
 
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      showToast("Please login again with your email OTP.", "error");
+      return;
+    }
+
     setDeletingId(sale._id);
 
     try {
       const response = await fetch(
         `${API_URL}/api/sales/${sale._id}`,
-        { method: "DELETE" }
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
 
       const data = await response.json();
+
+      if (response.status === 401) {
+        throw new Error("Login expired. Please logout and login again.");
+      }
 
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Could not delete sale");
@@ -280,6 +325,7 @@ export default function SalesList({ refreshKey }: SalesListProps) {
       setDeletingId(null);
     }
   }
+
 
   return (
     <section className="mt-6 w-full rounded-2xl border border-gray-800 bg-gray-900 p-4 shadow-xl shadow-black/10 sm:p-5">
@@ -381,11 +427,10 @@ export default function SalesList({ refreshKey }: SalesListProps) {
 
                     <td className="px-3 py-3">
                       <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                          amounts.pending <= 0
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${amounts.pending <= 0
                             ? "bg-emerald-500/10 text-emerald-400"
                             : "bg-amber-500/10 text-amber-300"
-                        }`}
+                          }`}
                       >
                         {amounts.pending <= 0 ? "Paid" : "Pending"}
                       </span>
