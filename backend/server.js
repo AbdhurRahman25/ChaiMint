@@ -29,6 +29,7 @@ const allowedOrigins = (
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+
 app.use(
   cors({
     origin(origin, callback) {
@@ -38,8 +39,11 @@ app.use(
 
       return callback(new Error("Origin not allowed by CORS"));
     },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
 
 app.use(express.json({ limit: "100kb" }));
 
