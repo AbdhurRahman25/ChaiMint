@@ -56,13 +56,6 @@ function handleLogout() {
 }
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const [creditCustomerName, setCreditCustomerName] = useState("");
-
-function handleMarkAsPaid(customerName: string) {
-  setCreditCustomerName(customerName);
-  setPage("Customers");
-}
-
   function handleSaleSaved() {
     setRefreshKey((previous) => previous + 1);
   }

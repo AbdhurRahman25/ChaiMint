@@ -696,6 +696,7 @@ app.put("/api/sales/:id", async (req, res) => {
 });
 
 
+
  // DELETE SALE
 app.delete("/api/sales/:id", async (req, res) => {
   try {
@@ -708,10 +709,11 @@ app.delete("/api/sales/:id", async (req, res) => {
       });
     }
 
-     await Sale.findOneAndDelete({
-  _id: id,
-  userId: req.user.userId,
-});
+    // Find only this account's sale
+    const sale = await Sale.findOne({
+      _id: id,
+      userId: req.user.userId,
+    });
 
     if (!sale) {
       return res.status(404).json({
@@ -720,14 +722,11 @@ app.delete("/api/sales/:id", async (req, res) => {
       });
     }
 
-     // Preserve recorded customer payment history
+    // Preserve this account's payment history
     const linkedPayment = await CustomerPayment.findOne({
-  userId: req.user.userId,
-  "allocations.saleId": sale._id,
-});
-
-   
-   
+      userId: req.user.userId,
+      "allocations.saleId": sale._id,
+    });
 
     if (linkedPayment) {
       return res.status(409).json({
@@ -737,7 +736,10 @@ app.delete("/api/sales/:id", async (req, res) => {
       });
     }
 
-    await Sale.findByIdAndDelete(id);
+    await Sale.deleteOne({
+      _id: sale._id,
+      userId: req.user.userId,
+    });
 
     return res.json({
       success: true,
@@ -752,6 +754,7 @@ app.delete("/api/sales/:id", async (req, res) => {
     });
   }
 });
+
 
 function formatExpenseCategory(value) {
   return String(value || "")
@@ -852,11 +855,14 @@ app.put("/api/expenses/:id", async (req, res) => {
       });
     }
 
-    const expense = await Expense.findByIdAndUpdate(
-      id,
-      values,
-      { new: true, runValidators: true }
-    );
+   const expense = await Expense.findOneAndUpdate(
+  {
+    _id: id,
+    userId: req.user.userId,
+  },
+  values,
+  { new: true, runValidators: true }
+);
 
     if (!expense) {
       return res.status(404).json({
@@ -892,7 +898,10 @@ app.delete("/api/expenses/:id", async (req, res) => {
       });
     }
 
-    const expense = await Expense.findByIdAndDelete(id);
+    const expense = await Expense.findOneAndDelete({
+  _id: id,
+  userId: req.user.userId,
+});
 
     if (!expense) {
       return res.status(404).json({
@@ -934,7 +943,9 @@ app.post("/api/customer-payments", async (req, res) => {
       });
     }
 
-    const allSales = await Sale.find().sort({ createdAt: 1 });
+   const allSales = await Sale.find({
+  userId: req.user.userId,
+}).sort({ createdAt: 1 });
 
     const customerSales = allSales.filter(
       (sale) =>

@@ -328,8 +328,8 @@ function Expenses() {
       throw new Error(data.message || "Failed to save expense");
     }
 
-    setCategory("Milk");
-    setQuantity("1");
+    setCategory("");
+    setQuantity("");
     setAmount("");
 
     showToast("Expense saved successfully!", "success");
