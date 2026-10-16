@@ -40,14 +40,14 @@ function App() {
 
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Scroll to the top whenever the selected page changes.
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "auto",
+    });
   }, [page]);
-
-  function navigateTo(nextPage: Page) {
-    setPage(nextPage);
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  }
 
   function handleLoginSuccess(token: string, email: string) {
     localStorage.setItem("token", token);
@@ -63,7 +63,6 @@ function App() {
     setUserEmail("");
     setIsLoggedIn(false);
     setPage("Dashboard");
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }
 
   function handleSaleSaved() {
@@ -85,19 +84,31 @@ function App() {
     {
       title: "Shop Expenses",
       description: "Track milk, sugar, rent and other costs.",
-      icon: <span className="text-4xl font-semibold text-teal-300">₹</span>,
+      icon: (
+        <span className="text-4xl font-semibold text-teal-300">
+          ₹
+        </span>
+      ),
       target: "Expenses",
     },
     {
       title: "Customer Balances",
       description: "Review pending balances and record payments.",
-      icon: <span className="text-4xl text-teal-200">♙</span>,
+      icon: (
+        <span className="text-4xl text-teal-200">
+          ♙
+        </span>
+      ),
       target: "Customers",
     },
     {
       title: "Daily Reports",
       description: "Review daily sales and expenses.",
-      icon: <span className="text-4xl text-teal-300">▥</span>,
+      icon: (
+        <span className="text-4xl text-teal-300">
+          ▥
+        </span>
+      ),
       target: "Reports",
     },
   ];
@@ -124,6 +135,7 @@ function App() {
       default:
         return (
           <div className="space-y-6">
+            {/* Welcome banner */}
             <section className="relative min-h-[310px] overflow-hidden rounded-2xl border border-emerald-900 bg-gradient-to-r from-[#031a1c] via-[#062b28] to-[#031a1c] p-6 shadow-xl sm:min-h-[290px] sm:p-8">
               <div className="relative z-10 max-w-2xl pr-20 sm:pr-0">
                 <p className="font-semibold text-emerald-400">
@@ -134,7 +146,9 @@ function App() {
                   <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
                     ChaiMint
                   </h1>
-                  <span className="text-4xl text-emerald-400">🍃</span>
+                  <span className="text-4xl text-emerald-400">
+                    🍃
+                  </span>
                 </div>
 
                 <p className="mt-3 text-base text-slate-400 sm:text-lg">
@@ -142,13 +156,14 @@ function App() {
                 </p>
 
                 <button
-                  onClick={() => navigateTo("Sales")}
+                  onClick={() => setPage("Sales")}
                   className="mt-6 rounded-xl bg-emerald-500 px-5 py-3 font-bold text-gray-950 transition hover:bg-emerald-400 sm:px-6"
                 >
                   + Add New Sale
                 </button>
               </div>
 
+              {/* Decorative tea illustration */}
               <div
                 aria-hidden="true"
                 className="pointer-events-none absolute bottom-0 right-2 flex select-none items-end justify-center sm:right-4"
@@ -171,11 +186,12 @@ function App() {
               </div>
             </section>
 
+            {/* Feature cards */}
             <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {dashboardCards.map((item) => (
                 <button
                   key={item.title}
-                  onClick={() => navigateTo(item.target)}
+                  onClick={() => setPage(item.target)}
                   className="group rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-[#080f1c] p-5 text-left shadow-lg transition duration-200 hover:-translate-y-1 hover:border-emerald-700 hover:bg-slate-900"
                 >
                   <div className="flex h-[72px] w-[72px] items-center justify-center rounded-2xl bg-emerald-950">
@@ -197,6 +213,7 @@ function App() {
               ))}
             </section>
 
+            {/* Quick overview */}
             <section className="flex gap-4 rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900 to-[#080f1c] p-5 sm:p-7">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-emerald-950 text-3xl text-emerald-400">
                 ♧
@@ -206,6 +223,7 @@ function App() {
                 <h3 className="text-xl font-bold text-white">
                   Quick Overview
                 </h3>
+
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400 sm:text-base">
                   Select Sales to record a transaction, Expenses to enter
                   shop costs, Customers to manage pending balances, or
@@ -222,85 +240,131 @@ function App() {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  const firstLetter = (userEmail.trim().charAt(0) || "C").toUpperCase();
-
   return (
-    <div className="min-h-screen bg-[#030914] text-slate-100">
-      {/* TOP NAVIGATION */}
-      <header className="sticky top-0 z-50 border-b border-slate-800 bg-[#07111f]/95 shadow-lg backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-3 px-3 py-3 sm:px-5 lg:px-8">
-          {/* Account area */}
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none sm:gap-3">
-            <div
-              title={userEmail || "ChaiMint account"}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-700 text-lg font-bold text-white"
+    <div className="min-h-screen bg-[#030914] text-slate-100 md:flex">
+      {/* Desktop sidebar */}
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[300px] flex-col overflow-y-auto border-r border-slate-800 bg-[#0d1727] p-5 md:flex">
+        <div className="mb-7 flex items-center gap-3 px-1 py-1">
+          <ChaimintLogo size={56} />
+
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-tight text-white">
+              ChaiMint
+            </h1>
+            <p className="text-xs text-slate-400">
+              Tea Shop Management
+            </p>
+          </div>
+        </div>
+
+        <p className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+          Main Menu
+        </p>
+
+        <nav className="flex flex-col gap-2">
+          {menuItems.map((item) => (
+            <button
+              key={item.label}
+              onClick={() => setPage(item.label)}
+              aria-current={page === item.label ? "page" : undefined}
+              className={`flex shrink-0 items-center gap-4 rounded-xl px-4 py-4 text-left text-sm font-medium transition ${
+                page === item.label
+                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-950/40"
+                  : "text-slate-400 hover:bg-slate-800 hover:text-white"
+              }`}
             >
-              {firstLetter}
+              <span className="w-4 text-center text-lg">
+                {item.icon}
+              </span>
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <p className="mt-auto pt-10 text-sm leading-6 text-slate-400">
+          Your daily tea shop operations, all in one place.
+        </p>
+      </aside>
+
+      {/* Main content */}
+      <main className="min-w-0 flex-1 bg-[#030914] px-4 py-4 sm:p-6 lg:ml-[300px] lg:p-8">
+        {/* Top header and navigation */}
+        <header className="mb-6 border-b border-slate-800 pb-4">
+          {/* Email left; Back and Logout right */}
+          <div className="flex w-full items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-700 text-lg font-bold text-white sm:h-12 sm:w-12">
+                {userEmail ? userEmail.charAt(0).toUpperCase() : "U"}
+              </div>
+
+              <span
+                title={userEmail || "Shop Workspace"}
+                className="min-w-0 truncate text-sm font-semibold text-emerald-200 sm:text-base"
+              >
+                {userEmail || "Shop Workspace"}
+              </span>
             </div>
 
-            <span
-              title={userEmail}
-              className="max-w-[150px] truncate text-xs font-medium text-emerald-200 sm:max-w-[220px] sm:text-sm"
-            >
-              {userEmail || "Shop Workspace"}
-            </span>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                onClick={() => {
+                  setPage("Dashboard");
+                  window.scrollTo({
+                    top: 0,
+                    left: 0,
+                    behavior: "auto",
+                  });
+                }}
+                className="rounded-xl border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-300 transition hover:border-emerald-500 hover:bg-slate-800 sm:px-4"
+              >
+                ← Back
+              </button>
 
-            <button
-              onClick={() => navigateTo("Dashboard")}
-              className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-2 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 sm:px-3 sm:text-sm"
-              aria-label="Go back to dashboard"
-              title="Back to Dashboard"
-            >
-              ← <span className="hidden sm:inline">Back</span>
-            </button>
-
-            <button
-              onClick={handleLogout}
-              className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-2 text-xs font-semibold text-slate-200 transition hover:border-red-800 hover:bg-red-950/50 sm:px-3 sm:text-sm"
-            >
-              <span className="sm:hidden">↪</span>
-              <span className="hidden sm:inline">Logout</span>
-            </button>
+              <button
+                onClick={handleLogout}
+                className="rounded-xl border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-300 transition hover:border-red-500 hover:bg-slate-800 sm:px-4"
+              >
+                Logout
+              </button>
+            </div>
           </div>
 
-          {/* Page navigation */}
-          <nav
-            aria-label="Main navigation"
-            className="flex w-full items-stretch gap-1 overflow-x-auto border-t border-slate-800/70 pt-2 sm:w-auto sm:flex-1 sm:justify-end sm:gap-2 sm:border-0 sm:pt-0"
-          >
+          {/* Top navigation: mobile and tablet */}
+          <nav className="mt-4 grid grid-cols-5 gap-1 sm:gap-2 md:hidden">
             {menuItems.map((item) => (
               <button
                 key={item.label}
-                onClick={() => navigateTo(item.label)}
+                onClick={() => setPage(item.label)}
                 aria-current={page === item.label ? "page" : undefined}
-                className={`flex min-w-[62px] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-center text-[10px] font-medium transition sm:min-w-[76px] sm:flex-none sm:px-3 sm:text-xs ${
+                className={`flex min-w-0 flex-col items-center justify-center gap-2 rounded-xl px-0.5 py-3 text-center transition ${
                   page === item.label
-                    ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-inset ring-emerald-500/20"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "border border-emerald-800 bg-emerald-950/70 text-emerald-300"
+                    : "border border-transparent text-slate-400 hover:bg-slate-800 hover:text-white"
                 }`}
               >
-                <span className="text-lg leading-none sm:text-xl">
+                <span className="text-xl leading-none sm:text-2xl">
                   {item.icon}
                 </span>
-                <span className="whitespace-nowrap">
-                  {item.label === "Customers" ? "Customer" : item.label}
+                <span className="w-full whitespace-nowrap text-[10px] font-medium min-[380px]:text-xs sm:text-sm">
+                  {item.label}
                 </span>
               </button>
             ))}
           </nav>
-        </div>
-      </header>
 
-      {/* MAIN CONTENT */}
-      <main className="mx-auto min-w-0 max-w-[1800px] px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
-        <div className="mb-6">
-          <p className="text-sm text-slate-500">ChaiMint / {page}</p>
-          <h2 className="mt-1 text-3xl font-bold text-white sm:text-4xl">
-            {page}
-          </h2>
-        </div>
+          {/* Current page title */}
+          <div className="mt-5">
+            <p className="text-sm text-slate-500">
+              ChaiMint / {page}
+            </p>
+            <h2 className="mt-1 text-3xl font-bold text-white">
+              {page}
+            </h2>
+          </div>
+        </header>
 
         {renderPage()}
+
         <ToastContainer />
       </main>
     </div>
