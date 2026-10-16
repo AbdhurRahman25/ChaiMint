@@ -271,7 +271,7 @@ function handleLogout() {
 
       {/* Main content */}
       
-<main className="min-w-0 flex-1 bg-[#030914] p-4 sm:p-6 lg:ml-[300px] lg:p-8">
+<main className="min-w-0 flex-1 bg-[#030914] px-4 pb-24 pt-4 sm:p-6 lg:ml-[300px] lg:p-8">
 
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -289,16 +289,26 @@ function handleLogout() {
   </div>
 
   <button
+  onClick={() => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      setPage("Dashboard");
+    }
+  }}
+  className="rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-800"
+>
+  ← Back
+</button>
+
+  <button
     onClick={handleLogout}
     className="rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800"
   >
     Logout
   </button>
 
-  <button
-  >
-    x
-  </button>
+  
 
 </div>
         </header>
@@ -306,6 +316,25 @@ function handleLogout() {
         {renderPage()}
 
         <ToastContainer />
+
+        <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-slate-800 bg-[#0d1727] px-1 pb-[env(safe-area-inset-bottom)] pt-2 md:hidden">
+  {menuItems.map((item) => (
+    <button
+      key={item.label}
+      onClick={() => setPage(item.label)}
+      className={`flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-2 text-xs transition ${
+        page === item.label
+          ? "text-emerald-400"
+          : "text-slate-400 hover:text-white"
+      }`}
+    >
+      <span className="text-xl">{item.icon}</span>
+      <span className="truncate text-[10px] min-[380px]:text-xs">
+        {item.label === "Customers" ? "Customer" : item.label}
+      </span>
+    </button>
+  ))}
+</nav>
       </main>
     </div>
   );
