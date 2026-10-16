@@ -3,9 +3,10 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 require("dotenv").config();
-const nodemailer = require("nodemailer");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const { Resend } = require("resend");
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const Sale = require("./models/sale");
 const Expense = require("./models/Expense");
@@ -49,19 +50,6 @@ app.use(express.json({ limit: "100kb" }));
 
 
 const bcrypt = require("bcryptjs");
-
-
-// Keep your existing emailTransporter and normalizeEmail function.
-
-const emailTransporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.resend.com",
-  port: Number(process.env.SMTP_PORT || 465),
-  secure: true,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
@@ -119,13 +107,12 @@ app.post("/api/auth/register/request-otp", async (req, res) => {
         message: "Enter a valid email address",
       });
     }
-
-    if (
-      !process.env.SMTP_USER ||
-      !process.env.SMTP_PASS ||
-      !process.env.JWT_SECRET ||
-      process.env.JWT_SECRET.length < 32
-    ) {
+      if (
+  !process.env.RESEND_API_KEY ||
+  !process.env.JWT_SECRET ||
+  process.env.JWT_SECRET.length < 32
+)
+    {
       return res.status(500).json({
         success: false,
         message: "Email or authentication settings are missing",
@@ -181,19 +168,23 @@ app.post("/api/auth/register/request-otp", async (req, res) => {
     });
 
     try {
-      await emailTransporter.sendMail({
-        from: process.env.SMTP_FROM || process.env.SMTP_USER,
-        to: email,
-        subject: "Verify your ChaiMint registration",
-        text: `Your ChaiMint registration OTP is ${otp}. It expires in 5 minutes. Do not share it.`,
-      });
+     const { data, error } = await resend.emails.send({
+  from: "ChaiMint <onboarding@resend.dev>",
+  to: [email],
+  subject: "Verify your ChaiMint registration",
+  text: `Your ChaiMint registration OTP is ${otp}. It expires in 5 minutes. Do not share it.`,
+});
+
+if (error) {
+  throw new Error(error.message);
+}
     } catch (mailError) {
       otpStore.delete(key);
       console.error("Registration email failed:", mailError.message);
 
       return res.status(502).json({
         success: false,
-        message: "Could not send OTP email. Check SMTP settings.",
+        message: "Could not send OTP email. Check Resend API settings.",
       });
     }
 
