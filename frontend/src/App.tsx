@@ -294,6 +294,12 @@ function handleLogout() {
   >
     Logout
   </button>
+
+  <button
+  >
+    x
+  </button>
+
 </div>
         </header>
 
