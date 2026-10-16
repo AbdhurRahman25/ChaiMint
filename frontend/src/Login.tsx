@@ -23,6 +23,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -35,6 +36,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setOtp("");
     setPassword("");
     setOtpSent(false);
+    setShowPassword(false);
     setMessage("");
     setError(false);
   }
@@ -309,25 +311,36 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             </>
           )}
 
-          <div>
-            <label className="mb-2 block text-sm font-medium">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Minimum 8 characters"
-              minLength={8}
-              maxLength={128}
-              autoComplete={
-                mode === "register" ? "new-password" : "current-password"
-              }
-              disabled={loading}
-              required
-              className="w-full rounded-xl border border-slate-700 bg-[#030914] px-4 py-3 outline-none focus:border-emerald-500 disabled:opacity-60"
-            />
-          </div>
+         
+<div className="relative">
+  <label className="mb-2 block text-sm font-medium">
+  Password
+</label>
+  <input
+    type={showPassword ? "text" : "password"}
+    value={password}
+    onChange={(event) => setPassword(event.target.value)}
+    placeholder="Minimum 8 characters"
+    minLength={8}
+    maxLength={128}
+    autoComplete={
+      mode === "register" ? "new-password" : "current-password"
+    }
+    disabled={loading}
+    required
+    className="w-full rounded-xl border border-slate-700 bg-[#030914] px-4 py-3 pr-20 outline-none focus:border-emerald-500 disabled:opacity-60"
+  />
+
+  <button
+    type="button"
+    onClick={() => setShowPassword((previous) => !previous)}
+    className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-emerald-300 hover:text-emerald-200"
+    aria-label={showPassword ? "Hide password" : "Show password"}
+  >
+    {showPassword ? "Hide" : "Show"}
+  </button>
+</div>
+
 
           {message && (
             <p
