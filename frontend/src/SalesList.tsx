@@ -314,12 +314,15 @@ const loadSales = useCallback(async () => {
         throw new Error(data.message || "Could not delete sale");
       }
 
-      if (editingSale?._id === sale._id) {
-        setEditingSale(null);
-      }
+     if (editingSale?._id === sale._id) {
+  setEditingSale(null);
+}
 
-      showToast("Sale cancelled successfully!", "success");
-      await loadSales();
+setSales((currentSales) =>
+  currentSales.filter((item) => item._id !== sale._id)
+);
+
+showToast("Sale deleted successfully!", "success");
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Failed to cancel sale",

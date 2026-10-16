@@ -720,8 +720,8 @@ app.put("/api/sales/:id", async (req, res) => {
 
 
 
- 
- // DELETE SALE — cancel instead of permanently deleting
+
+ // DELETE SALE — permanently delete sale and clean payment allocations
 app.delete("/api/sales/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -745,32 +745,72 @@ app.delete("/api/sales/:id", async (req, res) => {
       });
     }
 
-    if (sale.status === "Cancelled") {
-      return res.status(409).json({
-        success: false,
-        message: "This sale is already cancelled.",
-      });
+    // Find payments linked to this sale
+    const payments = await CustomerPayment.find({
+      userId: req.user.userId,
+      "allocations.saleId": sale._id,
+    });
+
+    for (const payment of payments) {
+      const removedAllocations = payment.allocations.filter(
+        (allocation) =>
+          allocation.saleId.toString() === sale._id.toString()
+      );
+
+      const removedAmount = removedAllocations.reduce(
+        (sum, allocation) => sum + allocation.amount,
+        0
+      );
+
+      // Remove only this sale's allocation
+      payment.allocations = payment.allocations.filter(
+        (allocation) =>
+          allocation.saleId.toString() !== sale._id.toString()
+      );
+
+      // If no allocations remain, remove the payment record.
+      // Otherwise, preserve the other allocations and adjust its amount.
+      if (payment.allocations.length === 0) {
+        await CustomerPayment.deleteOne({
+          _id: payment._id,
+          userId: req.user.userId,
+        });
+      } else {
+        payment.amount = Math.round(
+          (payment.amount - removedAmount) * 100
+        ) / 100;
+
+        if (payment.amount <= 0) {
+          await CustomerPayment.deleteOne({
+            _id: payment._id,
+            userId: req.user.userId,
+          });
+        } else {
+          await payment.save();
+        }
+      }
     }
 
-    sale.status = "Cancelled";
-    sale.cancelledAt = new Date();
-
-    await sale.save();
+    // Permanently remove the sale
+    await Sale.deleteOne({
+      _id: sale._id,
+      userId: req.user.userId,
+    });
 
     return res.json({
       success: true,
-      message: "Sale cancelled successfully. Payment history preserved.",
-      sale,
+      message: "Sale permanently deleted successfully",
     });
   } catch (error) {
-    console.error("Cancel sale error:", error);
+    console.error("Delete sale error:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Failed to cancel sale",
+      message: "Failed to delete sale",
     });
   }
 });
+
 
 
 
