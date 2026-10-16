@@ -225,7 +225,9 @@ function handleLogout() {
   return (
     <div className="min-h-screen bg-[#030914] text-slate-100 md:flex">
       {/* Sidebar */}
-      <aside className="flex flex-col border-b border-slate-800 bg-[#0d1727] p-4 md:min-h-screen md:w-[300px] md:shrink-0 md:border-b-0 md:border-r md:p-5">
+      
+<aside className="fixed left-0 top-0 z-40 hidden h-screen w-[300px] flex-col overflow-y-auto border-r border-slate-800 bg-[#0d1727] p-5 md:flex">
+
         <div className="mb-7 flex items-center gap-3 px-1 py-1">
           <ChaimintLogo size={56} />
 
@@ -268,7 +270,9 @@ function handleLogout() {
       </aside>
 
       {/* Main content */}
-      <main className="min-w-0 flex-1 bg-[#030914] p-4 sm:p-6 lg:p-8">
+      
+<main className="min-w-0 flex-1 bg-[#030914] p-4 sm:p-6 lg:ml-[300px] lg:p-8">
+
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm text-slate-500">
