@@ -334,7 +334,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   <button
     type="button"
     onClick={() => setShowPassword((previous) => !previous)}
-    className="absolute right-3 top-[55%] -translate-y-1/2 text-sm font-semibold text-emerald-300 
+    className="absolute right-3 top-[65%] -translate-y-1/2 text-sm font-semibold text-emerald-300 
     hover:text-emerald-200"
     aria-label={showPassword ? "Hide password" : "Show password"}
   >
