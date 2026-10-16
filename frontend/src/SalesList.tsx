@@ -71,7 +71,11 @@ const loadSales = useCallback(async () => {
       throw new Error(data.message || "Failed to load sales");
     }
 
-    setSales(data.sales || []);
+    setSales(
+  (data.sales || []).filter(
+    (sale: Sale & { status?: string }) => sale.status !== "Cancelled"
+  )
+);
   } catch (err) {
     setError(
       err instanceof Error ? err.message : "Could not load sales"
@@ -314,11 +318,11 @@ const loadSales = useCallback(async () => {
         setEditingSale(null);
       }
 
-      showToast("Sale deleted successfully!", "success");
+      showToast("Sale cancelled successfully!", "success");
       await loadSales();
     } catch (err) {
       showToast(
-        err instanceof Error ? err.message : "Failed to delete sale",
+        err instanceof Error ? err.message : "Failed to cancel sale",
         "error"
       );
     } finally {
